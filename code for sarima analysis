@@ -1,0 +1,53 @@
+import pandas as pd
+import matplotlib.pyplot as plt
+from statsmodels.tsa.statespace.sarimax import SARIMAX
+try:
+    sales_df = pd.read_excel('/content/cleaned_sales_data.xlsx')
+    sales_df['Date'] = pd.to_datetime(sales_df['Date'])
+    print("Cleaned data loaded successfully.")
+except FileNotFoundError:
+    print("Error: Cleaned CSV file not found. Please ensure it is in the correct directory.")
+    exit()
+
+daily_sales = sales_df.groupby('Date')['Qty Sold'].sum()
+daily_sales.index = pd.to_datetime(daily_sales.index)
+daily_sales = daily_sales.asfreq('D')
+
+
+print("\nTraining SARIMA model...")
+model = SARIMAX(
+    daily_sales,
+    order=(1, 1, 1),
+    seasonal_order=(0, 1, 1, 7),
+    enforce_stationarity=False,
+    enforce_invertibility=False
+)
+results = model.fit(disp=False)
+print("SARIMA model trained successfully.")
+
+forecast_period = 30
+forecast = results.get_forecast(steps=forecast_period)
+forecast_mean = forecast.predicted_mean
+confidence_intervals = forecast.conf_int()
+
+fig, ax = plt.subplots(figsize=(12, 6))
+
+ax.plot(daily_sales.index, daily_sales.values, label='Historical Sales')
+
+ax.plot(forecast_mean.index, forecast_mean.values, color='red', label='Forecasted Sales')
+
+ax.fill_between(
+    confidence_intervals.index,
+    confidence_intervals.iloc[:, 0],
+    confidence_intervals.iloc[:, 1],
+    color='pink', alpha=0.3, label='Confidence Interval'
+)
+ax.set_title('Daily Total Sales: Historical and Forecasted (SARIMA)')
+ax.set_xlabel('Date')
+ax.set_ylabel('Total Quantity Sold')
+ax.grid(True)
+ax.legend()
+plt.tight_layout()
+plt.savefig('sarima_sales_forecast.png')
+plt.close(fig)
+print("Generated sarima_sales_forecast.png")
